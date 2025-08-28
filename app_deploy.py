@@ -4,6 +4,7 @@ import requests
 import streamlit as st
 import pdfplumber
 from PIL import Image
+import easyocr
 import numpy as np
 import gc
 import google.generativeai as genai
@@ -29,27 +30,36 @@ def clear_memory():
     except:
         pass
 
+# INITIALIZE OCR (ONLY ONCE)
+if "ocr_reader" not in st.session_state:
+    st.session_state.ocr_reader = easyocr.Reader(['en'], gpu=True)
+
+reader = st.session_state.ocr_reader    
+
 def extract_text_from_pdf(file_path):
     text = ""
     if file_path.lower().endswith(".pdf"):
-        try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:  # PDF has digital text layer
-                        text += page_text + "\n"
-                    else:
-                        # For scanned PDFs, provide helpful guidance
-                        text += "[Scanned page detected - please copy and paste the text content manually]\n"
-        except Exception as e:
-            text = f"Error reading PDF: {str(e)}"
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+
+                if page_text:  # PDF has digital text layer
+                    text += page_text + "\n"
+                else:
+                    # PDF page is scanned → convert to image then OCR
+                    pil_image = page.to_image(resolution=150).original
+                    np_image = np.array(pil_image)
+                    results = reader.readtext(np_image)
+                    for res in results:
+                        text += res[1] + " "
+                    text += "\n"
     else:
-        # Handle Image (jpg, png, jpeg) - provide better guidance
-        try:
-            image = Image.open(file_path)
-            text = "[Image uploaded - please copy and paste the text content from the image manually for processing]"
-        except Exception as e:
-            text = f"Error reading image: {str(e)}"
+        # Handle Image (jpg, png, jpeg)
+        image = Image.open(file_path)
+        np_image = np.array(image) 
+        results = reader.readtext(np_image)
+        for res in results:
+            text += res[1] + " "
     return text.strip()
 
 # EXTRACT JSON USING LOCAL LLM
@@ -97,19 +107,8 @@ def extract_json_from_text(extracted_text):
         "- Output JSON only. Never include explanations outside JSON."
     )
 
-    try:
-        response = model.generate_content([prompt, extracted_text])
-        return response.text.strip()
-    except Exception as e:
-        return json.dumps({
-            "type": "object",
-            "properties": {
-                "document_type": "error",
-                "extracted_data": {"error": f"API Error: {str(e)}"}
-            },
-            "compliance_status": "Error occurred during processing",
-            "name": "response"
-        })
+    response = model.generate_content([prompt, extracted_text])
+    return response.text.strip()
 
 # STREAMLIT UI
 st.set_page_config(page_title="Government Document Processor", layout="wide")
