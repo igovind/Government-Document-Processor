@@ -169,7 +169,3 @@ st.sidebar.markdown("""
 - Tax Returns
 - Income Certificate
 """)
-
-st.sidebar.markdown("## 🔧 Setup Required")
-st.sidebar.markdown("Add your Gemini API key in Streamlit Cloud environment variables:")
-st.sidebar.code("GEMINI_API_KEY=your_api_key_here")
