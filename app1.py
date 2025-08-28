@@ -5,7 +5,6 @@ import streamlit as st
 import pdfplumber
 from PIL import Image
 import numpy as np
-import uuid
 import gc
 import google.generativeai as genai
 from dotenv import load_dotenv
