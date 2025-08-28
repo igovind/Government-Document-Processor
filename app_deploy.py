@@ -32,34 +32,53 @@ def clear_memory():
 
 # INITIALIZE OCR (ONLY ONCE)
 if "ocr_reader" not in st.session_state:
-    st.session_state.ocr_reader = easyocr.Reader(['en'], gpu=True)
+    try:
+        st.session_state.ocr_reader = easyocr.Reader(['en'], gpu=False)  # Use CPU for cloud deployment
+    except Exception as e:
+        st.error(f"Error initializing OCR: {str(e)}")
+        st.session_state.ocr_reader = None
 
 reader = st.session_state.ocr_reader    
 
 def extract_text_from_pdf(file_path):
     text = ""
     if file_path.lower().endswith(".pdf"):
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
 
-                if page_text:  # PDF has digital text layer
-                    text += page_text + "\n"
-                else:
-                    # PDF page is scanned → convert to image then OCR
-                    pil_image = page.to_image(resolution=150).original
-                    np_image = np.array(pil_image)
-                    results = reader.readtext(np_image)
-                    for res in results:
-                        text += res[1] + " "
-                    text += "\n"
+                    if page_text:  # PDF has digital text layer
+                        text += page_text + "\n"
+                    else:
+                        # PDF page is scanned → convert to image then OCR
+                        if reader is not None:
+                            try:
+                                pil_image = page.to_image(resolution=150).original
+                                np_image = np.array(pil_image)
+                                results = reader.readtext(np_image)
+                                for res in results:
+                                    text += res[1] + " "
+                                text += "\n"
+                            except Exception as e:
+                                text += f"[OCR Error on scanned page: {str(e)}]\n"
+                        else:
+                            text += "[OCR not available - please provide text input manually]\n"
+        except Exception as e:
+            text = f"Error reading PDF: {str(e)}"
     else:
         # Handle Image (jpg, png, jpeg)
-        image = Image.open(file_path)
-        np_image = np.array(image) 
-        results = reader.readtext(np_image)
-        for res in results:
-            text += res[1] + " "
+        try:
+            image = Image.open(file_path)
+            np_image = np.array(image) 
+            if reader is not None:
+                results = reader.readtext(np_image)
+                for res in results:
+                    text += res[1] + " "
+            else:
+                text = "[OCR not available - please provide text input manually]"
+        except Exception as e:
+            text = f"Error reading image: {str(e)}"
     return text.strip()
 
 # EXTRACT JSON USING LOCAL LLM
@@ -107,14 +126,25 @@ def extract_json_from_text(extracted_text):
         "- Output JSON only. Never include explanations outside JSON."
     )
 
-    response = model.generate_content([prompt, extracted_text])
-    return response.text.strip()
+    try:
+        response = model.generate_content([prompt, extracted_text])
+        return response.text.strip()
+    except Exception as e:
+        return json.dumps({
+            "type": "object",
+            "properties": {
+                "document_type": "error",
+                "extracted_data": {"error": f"API Error: {str(e)}"}
+            },
+            "compliance_status": "Error occurred during processing",
+            "name": "response"
+        })
 
 # STREAMLIT UI
 st.set_page_config(page_title="Government Document Processor", layout="wide")
-st.title("📄 Government Document Processor")
+st.title("📄 Government Document Processor with OCR")
 
-st.info("💡 **Tip**: For best results, use documents with digital text or copy-paste text content directly. Uploaded images and scanned PDFs will need manual text input.")
+st.info("🔍 **Full OCR Support**: This app can now scan and extract text from images and scanned PDFs using AI-powered OCR technology!")
 
 text_input = st.text_area("Your Input (Text)", placeholder="Provide text details or describe your challenge...")
 uploaded_file = st.file_uploader("Upload File", type=["pdf", "png", "jpg", "jpeg"])
