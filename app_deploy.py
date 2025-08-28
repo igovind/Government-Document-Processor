@@ -40,15 +40,15 @@ def extract_text_from_pdf(file_path):
                     if page_text:  # PDF has digital text layer
                         text += page_text + "\n"
                     else:
-                        # For scanned PDFs, we'll use a fallback message
-                        text += "[Scanned page - OCR not available in cloud deployment]\n"
+                        # For scanned PDFs, provide helpful guidance
+                        text += "[Scanned page detected - please copy and paste the text content manually]\n"
         except Exception as e:
             text = f"Error reading PDF: {str(e)}"
     else:
-        # Handle Image (jpg, png, jpeg) - simplified for deployment
+        # Handle Image (jpg, png, jpeg) - provide better guidance
         try:
             image = Image.open(file_path)
-            text = "[Image uploaded - OCR processing not available in cloud deployment. Please provide text input instead.]"
+            text = "[Image uploaded - please copy and paste the text content from the image manually for processing]"
         except Exception as e:
             text = f"Error reading image: {str(e)}"
     return text.strip()
@@ -114,9 +114,9 @@ def extract_json_from_text(extracted_text):
 
 # STREAMLIT UI
 st.set_page_config(page_title="Government Document Processor", layout="wide")
-st.title("📄 Government Document Processor (Cloud Version)")
+st.title("📄 Government Document Processor")
 
-st.info("⚠️ **Cloud Deployment Notice**: OCR processing for scanned documents is limited. For best results, use documents with digital text or provide text input directly.")
+st.info("💡 **Tip**: For best results, use documents with digital text or copy-paste text content directly. Uploaded images and scanned PDFs will need manual text input.")
 
 text_input = st.text_area("Your Input (Text)", placeholder="Provide text details or describe your challenge...")
 uploaded_file = st.file_uploader("Upload File", type=["pdf", "png", "jpg", "jpeg"])
